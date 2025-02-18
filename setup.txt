@@ -24,6 +24,8 @@ pip3 install git+https://github.com/mlfoundations/open_clip.git@main
 ---> pip packages to install and make requirements
 
 
+mkdir model && mv /workspace/chest_xray_findings.pt model/
+
 ---> build and run
 
 serve build main:caption_app -o config.yaml
