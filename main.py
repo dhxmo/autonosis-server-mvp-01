@@ -39,23 +39,15 @@ class CaptionXrayChest:
 
         try:
             contents = file.file.read()
-            with open(file.filename, 'wb') as f:
+            with open(os.path.join(UPLOAD_FOLDER, file.filename), 'wb') as f:
                 f.write(contents)
         except Exception:
             raise HTTPException(status_code=500, detail='Something went wrong')
         finally:
             file.file.close()
 
-        return {"message": f"Successfully uploaded {file.filename}"}
-
-        # # download multipart image
-        #
-        # img_path = "model/test.png"
-        #
-        # caption = self.generate_caption(img_path)
-        # print("caption", caption)
-        #
-        # return caption
+        caption = self.generate_caption(file.filename)
+        return {"updated_findings": caption}
 
     def generate_caption(self, img_path) -> str:
 
