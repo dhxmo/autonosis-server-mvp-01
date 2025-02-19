@@ -2,7 +2,7 @@ from pywhispercpp.model import Model
 
 
 def transcribe_audio_file(file_path):
-    model = Model("base.en")
+    model = Model("medium.en")
     segments = model.transcribe(file_path)
 
     all_text = ""
