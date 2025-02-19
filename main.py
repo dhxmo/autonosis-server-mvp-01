@@ -1,14 +1,12 @@
 import json
-import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
 import aiofiles
 import numpy as np
-from fastapi import FastAPI, WebSocket, Request, HTTPException, UploadFile, File
+from fastapi import FastAPI, WebSocket, Request, HTTPException
 from pywhispercpp.model import Model
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
@@ -26,6 +24,7 @@ async def lifespan(app: FastAPI):
 
     # Load the models
     models["whisper"] = Model("base.en")
+    # models["whisper"] = Model("medium.en")
 
     # --- Warm up the models
 
@@ -140,8 +139,15 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
         async with aiofiles.open(manager.recording_files[client_id], "wb") as out_file:
             while True:
-                data = await websocket.receive_bytes()
-                await out_file.write(data)
+                # Receive message and detect its type
+                message = await websocket.receive()
+
+                if message.get("text") == "reset_recording":
+                    # Reset the file pointer to prevent append to file
+                    await out_file.seek(0)
+                    await out_file.truncate(0)
+                else:
+                    await out_file.write(message.get("bytes"))
     except WebSocketDisconnect:
         manager.disconnect(client_id)
     except Exception as e:
