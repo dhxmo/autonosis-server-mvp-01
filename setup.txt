@@ -28,6 +28,4 @@ mkdir model && gdown 1VKTSgxy67T063Yf3EB-BuFR50kB8726Y
 curl -fsSL https://ollama.com/install.sh | sh
 ollama serve
 
-
-serve build main:caption_app -o config.yaml
-serve run config.yaml
+uvicorn main:app --reload

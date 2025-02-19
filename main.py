@@ -1,112 +1,71 @@
 import json
-import os
-import shutil
+import uuid
 from pathlib import Path
-from typing import Any
+from typing import Dict
 
-import open_clip
-import torch
-from PIL import Image
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from ray import serve
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import transformers
-
+from fastapi import FastAPI, WebSocket
+from starlette.middleware.cors import CORSMiddleware
+import aiofiles
+from starlette.websockets import WebSocketDisconnect
 
 app = FastAPI()
 
-# Configuration
-UPLOAD_FOLDER = "uploads"
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif"}
-MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins="http://localhost:3000",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Create upload directory
-Path(UPLOAD_FOLDER).mkdir(exist_ok=True)
+Path("media").mkdir(exist_ok=True)
 
+@app.get("/get_template")
+def get_template(modality:str, organ:str):
+    with open("assets/findings_template.json", "r") as f:
+        json_data = json.load(f)
 
-async def validate_file_extension(filename: str) -> bool:
-    """Validate file extension"""
-    return os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS
+    return {"findings_template": json_data[modality.lower()][organ.lower()]}
 
-
-@serve.deployment(num_replicas=1, ray_actor_options={"num_cpus": 0.2, "num_gpus": 0.2})
-@serve.ingress(app)
-class CaptionXrayChest:
+class ConnectionManager:
     def __init__(self):
-        self.model, _, self.transform = open_clip.create_model_and_transforms(
-            model_name="coca_ViT-L-14", pretrained="model/chest_xray_findings.pt"
-        )
+        self.active_connections: Dict[str] = {}
+        self.recording_files: Dict[str, str] = {}
 
-    @app.post("/infer")
-    async def infer(
-        self, file: UploadFile = File(...), data: str = Form(...)
-    ) -> dict[str, str | None]:
-        extra_data = json.loads(data)  # Convert JSON string back to dictionary
-        print("extra_data", extra_data["template_findings"])
+    async def connect(self, websocket: WebSocket, client_id: str):
+        await websocket.accept()
+        self.active_connections[client_id] = websocket
 
-        try:
-            contents = file.file.read()
-            with open(os.path.join(UPLOAD_FOLDER, file.filename), "wb") as f:
-                f.write(contents)
-        except Exception:
-            raise HTTPException(status_code=500, detail="Something went wrong")
-        finally:
-            file.file.close()
+        # Create UUID for this recording session
+        audio_uuid = str(uuid.uuid4())
+        self.recording_files[client_id] = f"media/{audio_uuid}.webm"
 
-        caption = self.generate_caption(file.filename)
-        return {"updated_findings": caption}
+        # Send UUID back to client immediately
+        await websocket.send_json({
+            "event_type": "audio_uuid",
+            "uuid": audio_uuid
+        })
 
-    def generate_caption(self, img_path) -> str:
+    def disconnect(self, client_id: str):
+        if client_id in self.active_connections:
+            self.active_connections.pop(client_id)
+            if client_id in self.recording_files:
+                self.recording_files.pop(client_id)
 
-        im = Image.open(img_path).convert("RGB")
-        im = self.transform(im).unsqueeze(0)
-
-        with torch.no_grad(), torch.cuda.amp.autocast():
-            generated = self.model.generate(im)
-
-        return (
-            open_clip.decode(generated[0])
-            .split("<end_of_text>")[0]
-            .replace("<start_of_text>", "")
-        )
+manager = ConnectionManager()
 
 
-@serve.deployment(num_replicas=1, ray_actor_options={"num_cpus": 0.8, "num_gpus": 1})
-class MedModel:
-    def __init__(self):
-        self.pipeline = transformers.pipeline(
-            "text-generation",
-            model="microsoft/phi-4",
-            model_kwargs={"torch_dtype": "auto"},
-            device_map="auto",
-        )
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    try:
+        await manager.connect(websocket, client_id)
 
-    @app.post("/chat")
-    async def chat(self, data: str = Form(...)) -> dict[str, Any]:
-        extra_data = json.loads(data)
-        user_prompt = extra_data["audio_data"]
-        prev_findings = extra_data["prev_findings"]
-
-        messages = [
-            {
-                "role": "system",
-                "content": "You need to edit a given finding with the template provided. Edit the "
-                "template_finding to accommodate what the new_finding wants to add. "
-                "Maintain the structure of template_finding, just update the information from "
-                "new_findings into template_findings. Provide the result in the exact same "
-                "format as the template_findings.",
-            },
-            {
-                "role": "user",
-                "content": f"template_findings: {prev_findings} \n\n new_findings: {user_prompt}",
-            },
-        ]
-
-        outputs = self.pipeline(messages, max_new_tokens=128)
-        response = outputs[0]["generated_text"][-1]
-
-        return {"updated_audio_text": response}
-
-
-# caption_app = CaptionXrayChest.bind()
-caption_app = MedModel.bind()
+        async with aiofiles.open(manager.recording_files[client_id], "wb") as out_file:
+            while True:
+                data = await websocket.receive_bytes()
+                await out_file.write(data)
+    except WebSocketDisconnect:
+        manager.disconnect(client_id)
+    except Exception as e:
+        print(f"Error in websocket connection: {e}")
+        await websocket.close(code=1000, reason="Server error")

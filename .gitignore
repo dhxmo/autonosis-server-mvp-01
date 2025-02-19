@@ -1,4 +1,5 @@
 model/
+media/
 
 .idea/
 .pytest_cache/
