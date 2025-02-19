@@ -12,23 +12,24 @@ from pywhispercpp.model import Model
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
-from model import transcribe_audio_file, llm
+from model import transcribe_audio_file, llm, ollama_llm
 
 # Store models in a dictionary
 models = {}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Load the models
     models["whisper"] = Model("base.en")
-    models["llm"] = transformers.pipeline(
-        "text-generation",
-        model="microsoft/phi-4",
-        model_kwargs={"torch_dtype": "auto"},
-        device_map="auto",
-    )
+    # models["llm"] = transformers.pipeline(
+    #     "text-generation",
+    #     model="microsoft/phi-4",
+    #     model_kwargs={"torch_dtype": "auto"},
+    #     device_map="auto",
+    # )
 
-    #--- Warm up the models
+    # --- Warm up the models
 
     # whisper warm up
     sample_rate = 16000  # Standard sample rate for Whisper
@@ -45,7 +46,7 @@ async def lifespan(app: FastAPI):
     models["whisper"].transcribe(dummy_audio)
 
     # llm warm up
-    models["llm"]("Hello")
+    # models["llm"]("Hello")
 
     yield
 
@@ -101,8 +102,7 @@ async def update_text(request: Request):
     print("audio_text", audio_text)
 
     # call llm
-    updated_text = llm(
-        pipeline=models["llm"],
+    updated_text = ollama_llm(
         prev_diagnosis=req_body["curr_text"],
         user_prompt=audio_text,
     )

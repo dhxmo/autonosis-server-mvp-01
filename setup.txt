@@ -23,6 +23,10 @@ GGML_CUDA=1 pip install git+https://github.com/absadiki/pywhispercpp
 
 pip install -r requirements.txt
 
+
+curl -fsSL https://ollama.com/install.sh | sh
+
+
 fastapi run main.py
 ---or---
 uvicorn main:app --reload
