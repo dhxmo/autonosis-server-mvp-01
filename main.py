@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     dummy_audio = dummy_audio / np.abs(dummy_audio).max()
     # Reshape to match expected format (batch_size, audio_length)
     dummy_audio = dummy_audio.reshape(1, -1)
-    models["whisper"](dummy_audio)
+    models["whisper"].transcribe(dummy_audio)
 
     # llm warm up
     models["llm"]("Hello")
