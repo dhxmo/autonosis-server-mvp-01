@@ -6,13 +6,12 @@ from typing import Dict
 
 import aiofiles
 import numpy as np
-import transformers
 from fastapi import FastAPI, WebSocket, Request
 from pywhispercpp.model import Model
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
-from model import transcribe_audio_file, llm, ollama_llm
+from model import transcribe_audio_file, ollama_llm
 
 # Store models in a dictionary
 models = {}
@@ -20,14 +19,11 @@ models = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # create media folder if it doesnt exist
+    Path("media").mkdir(exist_ok=True)
+
     # Load the models
     models["whisper"] = Model("base.en")
-    # models["llm"] = transformers.pipeline(
-    #     "text-generation",
-    #     model="microsoft/phi-4",
-    #     model_kwargs={"torch_dtype": "auto"},
-    #     device_map="auto",
-    # )
 
     # --- Warm up the models
 
@@ -45,14 +41,9 @@ async def lifespan(app: FastAPI):
     dummy_audio = dummy_audio.reshape(1, -1)
     models["whisper"].transcribe(dummy_audio)
 
-    # llm warm up
-    # models["llm"]("Hello")
-
     yield
 
     # Clean up resources
-    # del models["whisper"]
-    # del models["llm"]
     models.clear()
 
 
@@ -65,17 +56,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-Path("media").mkdir(exist_ok=True)
-
-# Load models on startup
-# whisper_model = Model("base.en")
-# llm_pipeline = transformers.pipeline(
-#     "text-generation",
-#     model="microsoft/phi-4",
-#     model_kwargs={"torch_dtype": "auto"},
-#     device_map="auto",
-# )
 
 
 @app.get("/ping")
