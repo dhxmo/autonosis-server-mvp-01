@@ -8,6 +8,7 @@ from fastapi import FastAPI, WebSocket, Request
 from starlette.middleware.cors import CORSMiddleware
 import aiofiles
 from starlette.websockets import WebSocketDisconnect
+from pywhispercpp.model import Model
 
 from model import transcribe_audio_file, llm
 
@@ -23,7 +24,9 @@ app.add_middleware(
 
 Path("media").mkdir(exist_ok=True)
 
-pipeline = transformers.pipeline(
+# Load models on startup
+whisper_model = Model("medium.en")
+llm_pipeline = transformers.pipeline(
     "text-generation",
     model="microsoft/phi-4",
     model_kwargs={"torch_dtype": "auto"},
@@ -45,12 +48,14 @@ async def update_text(request: Request):
 
     audio_file = f"media/{str(req_body['audio_uuid'])}.webm"
 
-    # transcribe audio file -> req_body["audio_uuid"]
-    audio_text = transcribe_audio_file(audio_file)
+    # transcribe audio file
+    audio_text = transcribe_audio_file(whisper_model, audio_file)
 
-    # call llm --> req_body["curr_text"] + audio_text
+    # call llm
     updated_text = llm(
-        pipeline=pipeline, prev_diagnosis=req_body["curr_text"], user_prompt=audio_text
+        pipeline=llm_pipeline,
+        prev_diagnosis=req_body["curr_text"],
+        user_prompt=audio_text,
     )
 
     return {"updated_text": updated_text}

@@ -1,9 +1,5 @@
-from pywhispercpp.model import Model
-
-
-def transcribe_audio_file(file_path):
-    model = Model("medium.en")
-    segments = model.transcribe(file_path)
+def transcribe_audio_file(whisper_model, file_path):
+    segments = whisper_model.transcribe(file_path)
 
     all_text = ""
     for segment in segments:
