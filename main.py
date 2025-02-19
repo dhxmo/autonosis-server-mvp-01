@@ -8,7 +8,7 @@ from typing import Dict
 
 import aiofiles
 import numpy as np
-from fastapi import FastAPI, WebSocket, Request, HTTPException
+from fastapi import FastAPI, WebSocket, Request, HTTPException, UploadFile, File
 from pywhispercpp.model import Model
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
@@ -65,7 +65,7 @@ async def root():
     return {"message": "pong"}
 
 
-@app.get("/get_template")
+@app.get("/get-template")
 def get_template(modality: str, organ: str):
     with open("assets/findings_template.json", "r") as f:
         json_data = json.load(f)
@@ -73,7 +73,7 @@ def get_template(modality: str, organ: str):
     return {"findings_template": json_data[modality.lower()][organ.lower()]}
 
 
-@app.post("/update_text")
+@app.post("/update-text")
 async def update_text(request: Request):
     try:
         req_body = await request.json()
@@ -91,25 +91,18 @@ async def update_text(request: Request):
         )
         print("updated_text", updated_text)
 
-        # once processed remove audio file to create a new one
-        print("deleting file after findings")
-        os.remove(audio_file)
-
         return {"updated_text": updated_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 
-@app.post("/transcribe_impression")
+@app.post("/transcribe-impression")
 async def transcribe_impression(request: Request):
     req_body = await request.json()
 
     audio_file = f"media/{str(req_body['audio_uuid'])}.webm"
     audio_text = transcribe_audio_file(models["whisper"], audio_file)
-
-    # once processed remove audio file to create a new one
-    os.remove(audio_file)
-    print("deleting file after impressions")
+    print("audio_text", audio_text)
 
     return {"audio_text": audio_text}
 
@@ -148,7 +141,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         async with aiofiles.open(manager.recording_files[client_id], "wb") as out_file:
             while True:
                 data = await websocket.receive_bytes()
-                print("writing to audio file")
                 await out_file.write(data)
     except WebSocketDisconnect:
         manager.disconnect(client_id)
