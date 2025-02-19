@@ -93,6 +93,16 @@ async def update_text(request: Request):
     return {"updated_text": updated_text}
 
 
+@app.post("/transcribe_impression")
+async def transcribe_impression(request: Request):
+    req_body = await request.json()
+
+    audio_file = f"media/{str(req_body['audio_uuid'])}.webm"
+    audio_text = transcribe_audio_file(models["whisper"], audio_file)
+
+    return {"audio_text": audio_text}
+
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str] = {}
@@ -127,10 +137,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         # Delete previous file if it exists
         if client_id in manager.recording_files:
             try:
+                print("removing previous file @", manager.recording_files[client_id])
                 os.remove(manager.recording_files[client_id])
             except OSError:
                 pass
 
+        # start fresh
         async with aiofiles.open(manager.recording_files[client_id], "wb") as out_file:
             while True:
                 data = await websocket.receive_bytes()
