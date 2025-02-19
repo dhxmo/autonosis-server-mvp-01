@@ -1,20 +1,59 @@
 import json
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict
 
+import aiofiles
 import numpy as np
-import torch
 import transformers
 from fastapi import FastAPI, WebSocket, Request
-from starlette.middleware.cors import CORSMiddleware
-import aiofiles
-from starlette.websockets import WebSocketDisconnect
 from pywhispercpp.model import Model
+from starlette.middleware.cors import CORSMiddleware
+from starlette.websockets import WebSocketDisconnect
 
 from model import transcribe_audio_file, llm
+
+# Store models in a dictionary
+models = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the models
+    models["whisper"] = Model("base.en")
+    models["llm"] = transformers.pipeline(
+        "text-generation",
+        model="microsoft/phi-4",
+        model_kwargs={"torch_dtype": "auto"},
+        device_map="auto",
+    )
+
+    #--- Warm up the models
+
+    # whisper warm up
+    sample_rate = 16000  # Standard sample rate for Whisper
+    duration = 3.0  # Duration in seconds
+    t = np.linspace(0, duration, int(sample_rate * duration), False)
+    # Create a sine wave at 440 Hz (A4 note)
+    dummy_audio = np.sin(2 * np.pi * 440 * t)
+    # Add some noise to make it more realistic
+    dummy_audio += 0.5 * np.random.randn(len(dummy_audio))
+    # Normalize to [-1, 1] range
+    dummy_audio = dummy_audio / np.abs(dummy_audio).max()
+    # Reshape to match expected format (batch_size, audio_length)
+    dummy_audio = dummy_audio.reshape(1, -1)
+    models["whisper"](dummy_audio)
+
+    # llm warm up
+    models["llm"]("Hello")
+
+    yield
+
+    # Clean up resources
+    # del models["whisper"]
+    # del models["llm"]
+    models.clear()
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -36,48 +75,6 @@ Path("media").mkdir(exist_ok=True)
 #     model_kwargs={"torch_dtype": "auto"},
 #     device_map="auto",
 # )
-
-
-# Store models in a dictionary
-models = {}
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Load the models
-    models["whisper"] = Model("base.en")
-    models["llm"] = transformers.pipeline(
-        "text-generation",
-        model="microsoft/phi-4",
-        model_kwargs={"torch_dtype": "auto"},
-        device_map="auto",
-    )
-
-    # Warm up the models
-    # Create dummy audio data
-    sample_rate = 16000  # Standard sample rate for Whisper
-    duration = 3.0  # Duration in seconds
-    t = np.linspace(0, duration, int(sample_rate * duration), False)
-    # Create a sine wave at 440 Hz (A4 note)
-    dummy_audio = np.sin(2 * np.pi * 440 * t)
-
-    # Add some noise to make it more realistic
-    dummy_audio += 0.5 * np.random.randn(len(dummy_audio))
-
-    # Normalize to [-1, 1] range
-    dummy_audio = dummy_audio / np.abs(dummy_audio).max()
-
-    # Reshape to match expected format (batch_size, audio_length)
-    dummy_audio = dummy_audio.reshape(1, -1)
-    models["whisper"](dummy_audio)
-    models["llm"]("Hello")  # Dummy inference
-
-    yield
-
-    # Clean up resources
-    del models["whisper"]
-    del models["llm"]
-    models.clear()
 
 
 @app.get("/ping")

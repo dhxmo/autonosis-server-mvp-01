@@ -21,4 +21,8 @@ export HF_TOKEN=___
 
 GGML_CUDA=1 pip install git+https://github.com/absadiki/pywhispercpp
 
+pip install -r requirements.txt
+
+fastapi run main.py
+---or---
 uvicorn main:app --reload
