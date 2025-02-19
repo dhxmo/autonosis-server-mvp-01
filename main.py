@@ -1,6 +1,8 @@
 import json
+import os
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
@@ -79,14 +81,12 @@ async def update_text(request: Request):
 
     # transcribe audio file
     audio_text = transcribe_audio_file(models["whisper"], audio_file)
-    print("audio_text", audio_text)
 
     # call llm
     updated_text = ollama_llm(
         prev_diagnosis=req_body["curr_text"],
         user_prompt=audio_text,
     )
-    print("updated_text", updated_text)
 
     return {"updated_text": updated_text}
 
@@ -121,6 +121,13 @@ manager = ConnectionManager()
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     try:
         await manager.connect(websocket, client_id)
+
+        # Delete previous file if it exists
+        if client_id in manager.recording_files:
+            try:
+                os.remove(manager.recording_files[client_id])
+            except OSError:
+                pass
 
         async with aiofiles.open(manager.recording_files[client_id], "wb") as out_file:
             while True:
