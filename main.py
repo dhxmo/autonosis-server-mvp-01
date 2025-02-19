@@ -1,8 +1,12 @@
 import json
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict
 
+import numpy as np
+import torch
 import transformers
 from fastapi import FastAPI, WebSocket, Request
 from starlette.middleware.cors import CORSMiddleware
@@ -12,7 +16,7 @@ from pywhispercpp.model import Model
 
 from model import transcribe_audio_file, llm
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,17 +29,61 @@ app.add_middleware(
 Path("media").mkdir(exist_ok=True)
 
 # Load models on startup
-whisper_model = Model("medium.en")
-llm_pipeline = transformers.pipeline(
-    "text-generation",
-    model="microsoft/phi-4",
-    model_kwargs={"torch_dtype": "auto"},
-    device_map="auto",
-)
+# whisper_model = Model("base.en")
+# llm_pipeline = transformers.pipeline(
+#     "text-generation",
+#     model="microsoft/phi-4",
+#     model_kwargs={"torch_dtype": "auto"},
+#     device_map="auto",
+# )
+
+
+# Store models in a dictionary
+models = {}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the models
+    models["whisper"] = Model("base.en")
+    models["llm"] = transformers.pipeline(
+        "text-generation",
+        model="microsoft/phi-4",
+        model_kwargs={"torch_dtype": "auto"},
+        device_map="auto",
+    )
+
+    # Warm up the models
+    # Create dummy audio data
+    sample_rate = 16000  # Standard sample rate for Whisper
+    duration = 3.0  # Duration in seconds
+    t = np.linspace(0, duration, int(sample_rate * duration), False)
+    # Create a sine wave at 440 Hz (A4 note)
+    dummy_audio = np.sin(2 * np.pi * 440 * t)
+
+    # Add some noise to make it more realistic
+    dummy_audio += 0.5 * np.random.randn(len(dummy_audio))
+
+    # Normalize to [-1, 1] range
+    dummy_audio = dummy_audio / np.abs(dummy_audio).max()
+
+    # Reshape to match expected format (batch_size, audio_length)
+    dummy_audio = dummy_audio.reshape(1, -1)
+    models["whisper"](dummy_audio)
+    models["llm"]("Hello")  # Dummy inference
+
+    yield
+
+    # Clean up resources
+    del models["whisper"]
+    del models["llm"]
+    models.clear()
+
 
 @app.get("/ping")
 async def root():
     return {"message": "pong"}
+
 
 @app.get("/get_template")
 def get_template(modality: str, organ: str):
@@ -52,14 +100,16 @@ async def update_text(request: Request):
     audio_file = f"media/{str(req_body['audio_uuid'])}.webm"
 
     # transcribe audio file
-    audio_text = transcribe_audio_file(whisper_model, audio_file)
+    audio_text = transcribe_audio_file(models["whisper"], audio_file)
+    print("audio_text", audio_text)
 
     # call llm
     updated_text = llm(
-        pipeline=llm_pipeline,
+        pipeline=models["llm"],
         prev_diagnosis=req_body["curr_text"],
         user_prompt=audio_text,
     )
+    print("updated_text", updated_text)
 
     return {"updated_text": updated_text}
 
