@@ -92,6 +92,7 @@ async def update_text(request: Request):
         print("updated_text", updated_text)
 
         # once processed remove audio file to create a new one
+        print("deleting file after findings")
         os.remove(audio_file)
 
         return {"updated_text": updated_text}
@@ -108,6 +109,7 @@ async def transcribe_impression(request: Request):
 
     # once processed remove audio file to create a new one
     os.remove(audio_file)
+    print("deleting file after impressions")
 
     return {"audio_text": audio_text}
 
@@ -146,6 +148,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         async with aiofiles.open(manager.recording_files[client_id], "wb") as out_file:
             while True:
                 data = await websocket.receive_bytes()
+                print("writing to audio file")
                 await out_file.write(data)
     except WebSocketDisconnect:
         manager.disconnect(client_id)
