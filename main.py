@@ -33,6 +33,9 @@ llm_pipeline = transformers.pipeline(
     device_map="auto",
 )
 
+@app.get("/ping")
+async def root():
+    return {"message": "pong"}
 
 @app.get("/get_template")
 def get_template(modality: str, organ: str):
