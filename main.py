@@ -8,7 +8,7 @@ from typing import Dict
 
 import aiofiles
 import numpy as np
-from fastapi import FastAPI, WebSocket, Request
+from fastapi import FastAPI, WebSocket, Request, HTTPException
 from pywhispercpp.model import Model
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
@@ -75,22 +75,28 @@ def get_template(modality: str, organ: str):
 
 @app.post("/update_text")
 async def update_text(request: Request):
-    req_body = await request.json()
+    try:
+        req_body = await request.json()
 
-    audio_file = f"media/{str(req_body['audio_uuid'])}.webm"
+        audio_file = f"media/{str(req_body['audio_uuid'])}.webm"
 
-    # transcribe audio file
-    audio_text = transcribe_audio_file(models["whisper"], audio_file)
-    print("audio_text", audio_text)
+        # transcribe audio file
+        audio_text = transcribe_audio_file(models["whisper"], audio_file)
+        print("audio_text", audio_text)
 
-    # call llm
-    updated_text = ollama_llm(
-        prev_diagnosis=req_body["curr_text"],
-        user_prompt=audio_text,
-    )
-    print("updated_text", updated_text)
+        # call llm
+        updated_text = ollama_llm(
+            prev_diagnosis=req_body["curr_text"],
+            user_prompt=audio_text,
+        )
+        print("updated_text", updated_text)
 
-    return {"updated_text": updated_text}
+        # once processed remove audio file to create a new one
+        os.remove(audio_file)
+
+        return {"updated_text": updated_text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 
 @app.post("/transcribe_impression")
@@ -99,6 +105,9 @@ async def transcribe_impression(request: Request):
 
     audio_file = f"media/{str(req_body['audio_uuid'])}.webm"
     audio_text = transcribe_audio_file(models["whisper"], audio_file)
+
+    # once processed remove audio file to create a new one
+    os.remove(audio_file)
 
     return {"audio_text": audio_text}
 
@@ -134,15 +143,6 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     try:
         await manager.connect(websocket, client_id)
 
-        # Delete previous file if it exists
-        if client_id in manager.recording_files:
-            try:
-                print("removing previous file @", manager.recording_files[client_id])
-                os.remove(manager.recording_files[client_id])
-            except OSError:
-                pass
-
-        # start fresh
         async with aiofiles.open(manager.recording_files[client_id], "wb") as out_file:
             while True:
                 data = await websocket.receive_bytes()
