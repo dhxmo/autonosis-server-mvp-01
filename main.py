@@ -81,12 +81,14 @@ async def update_text(request: Request):
 
     # transcribe audio file
     audio_text = transcribe_audio_file(models["whisper"], audio_file)
+    print("audio_text", audio_text)
 
     # call llm
     updated_text = ollama_llm(
         prev_diagnosis=req_body["curr_text"],
         user_prompt=audio_text,
     )
+    print("updated_text", updated_text)
 
     return {"updated_text": updated_text}
 
