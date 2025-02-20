@@ -23,8 +23,8 @@ async def lifespan(app: FastAPI):
     Path("media").mkdir(exist_ok=True)
 
     # Load the models
-    models["whisper"] = Model("base.en")
-    # models["whisper"] = Model("medium.en")
+    # models["whisper"] = Model("base.en")
+    models["whisper"] = Model("medium.en")
 
     # --- Warm up the models
 
@@ -103,10 +103,10 @@ async def transcribe_impression(request: Request):
     audio_text = transcribe_audio_file(models["whisper"], audio_file)
     print("audio_text", audio_text)
 
-    updated_text = llm_impressions_cleanup(audio_text)
-    print("updated_text", updated_text)
+    # updated_text = llm_impressions_cleanup(audio_text)
+    # print("updated_text", updated_text)
 
-    return {"audio_text": updated_text}
+    return {"audio_text": audio_text}
 
 
 class ConnectionManager:
