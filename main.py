@@ -23,8 +23,8 @@ async def lifespan(app: FastAPI):
     Path("media").mkdir(exist_ok=True)
 
     # Load the models
-    # models["whisper"] = Model("base.en")
-    models["whisper"] = Model("medium.en")
+    models["whisper"] = Model("base.en")
+    # models["whisper"] = Model("medium.en")
 
     # --- Warm up the models
 
