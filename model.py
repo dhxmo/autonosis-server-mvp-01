@@ -47,3 +47,33 @@ def ollama_llm(prev_diagnosis, user_prompt):
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {e}")
         return None
+
+
+def llm_impressions_cleanup(user_prompt):
+    url = "http://localhost:11434/api/chat"
+    data = {
+        "model": "phi4:latest",
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a radiologists typing assistant. "
+                "You need to edit some transcribed text. There might be some typos. "
+                "You need to modify the incoming_text in the context of radiology and update "
+                "the provided prompt. Return text in the same format as the incoming_text, "
+                "just edit it to take care of typos and conform to radiology domain",
+            },
+            {
+                "role": "user",
+                "content": f"incoming_text:: {user_prompt}",
+            },
+        ],
+        "stream": False,
+    }
+
+    try:
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        return response.json()["message"]["content"]
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed: {e}")
+        return None

@@ -11,7 +11,7 @@ from pywhispercpp.model import Model
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
-from model import transcribe_audio_file, ollama_llm
+from model import transcribe_audio_file, ollama_llm, llm_impressions_cleanup
 
 # Store models in a dictionary
 models = {}
@@ -103,7 +103,10 @@ async def transcribe_impression(request: Request):
     audio_text = transcribe_audio_file(models["whisper"], audio_file)
     print("audio_text", audio_text)
 
-    return {"audio_text": audio_text}
+    updated_text = llm_impressions_cleanup(audio_text)
+    print("updated_text", updated_text)
+
+    return {"audio_text": updated_text}
 
 
 class ConnectionManager:
