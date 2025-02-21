@@ -60,7 +60,7 @@ def llm_impressions_cleanup(user_prompt):
                 "You need to edit some transcribed text. There might be some typos. "
                 "You need to modify the incoming_text in the context of radiology and update "
                 "the provided prompt. Return text in the same format as the incoming_text, "
-                "just edit it to take care of typos and conform to radiology domain",
+                "just edit it to take care of typos and conform to radiology domain. Avoid duplication.",
             },
             {
                 "role": "user",
