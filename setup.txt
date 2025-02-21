@@ -14,20 +14,26 @@ cat ~/.ssh/id_ed25519.pub
 
 ----->>> add key and close
 
-git clone git@github.com:dhxmo/autonosis-server-mvp-01.git
+--- parallely in ssh port 2 --> start ollama
+curl -fsSL https://ollama.com/install.sh | sh
+ollama serve
+
+ctrl+B D
+
+ollama run phi4
+
+disconnect after download
+---------------------
+
+git clone git@github.com:dhxmo/autonosis-server-mvp-01.git && cd autonosis-server-mvp-01
 conda create -n core python=3.10
 conda activate core
 
 export HF_TOKEN=___
 
-curl -fsSL https://ollama.com/install.sh | sh
-ollama serve
-
-cd autonosis-server-mvp-01
 pip install -r requirements.txt
 pip install "fastapi[standard]"
 
-ollama run phi4
 fastapi run main.py
 ---or---
 uvicorn main:app --reload

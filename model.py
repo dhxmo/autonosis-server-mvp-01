@@ -30,7 +30,7 @@ def ollama_llm(prev_diagnosis, user_prompt):
                 "format as the prev_diagnosis. If markdown characters \\n \\t are present return them as is."
                 "There might be transcription errors in new_diagnosis due to misunderstanding. "
                 "If words don't align with the context of radiology, edit them for what you see fit in context with the rest of the new_diagnosis."
-                "Remember: provide the result in the exact same format as the prev_diagnosis.",
+                "Remember: provide the result in the exact same format as the prev_diagnosis. Avoid duplication.",
             },
             {
                 "role": "user",
